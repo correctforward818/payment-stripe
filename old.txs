@@ -1,0 +1,143 @@
+import React, { useState, useEffect } from "react";
+import { loadStripe } from "@stripe/stripe-js";
+import { CreditCard, Lock } from "lucide-react";
+import { Toaster, toast } from "react-hot-toast";
+import type { Stripe, StripeElements, StripeError } from "@stripe/stripe-js";
+
+// Initialize Stripe (replace with your publishable key)
+const stripePromise = loadStripe(
+  "pk_test_51RClcMGbS09Tnd17Py5f24dGJk1qF2s3WmTbmJZ7KmFG9lPxGPp5SYajcp30RjLzj9fXKHoh3R9MVYA3cRmGueq7003qFIVce1"
+);
+
+function App() {
+  const [amount, setAmount] = useState("");
+  const [payment_method_id, setPaymentMethodId] = useState<string | null>(null);
+  // const [stripe, setStripe] = useState<Stripe | null>(null);
+  // const [elements, setElements] = useState<StripeElements | null>(null);
+  // const [errors, setErrors] = useState({
+  //   cardNumber: "",
+  //   cardExpiry: "",
+  //   cardCvc: "",
+  // });
+
+  useEffect(() => {
+    const initializeStripe = async () => {
+      const stripe = await stripePromise;
+      if (!stripe) return;
+
+      const elements = stripe.elements();
+      const cardElement = elements.create("card");
+
+      const cardContainer = document.getElementById("card");
+      if (!cardContainer) {
+        console.error("Card container not found");
+        return;
+      }
+
+      cardElement.mount(cardContainer);
+
+      // You might want to move the payment method creation
+      // to a button click or form submit handler instead:
+      cardElement.on("change", async (event) => {
+        if (event.complete) {
+          const { paymentMethod, error } = await stripe.createPaymentMethod({
+            type: "card",
+            card: cardElement,
+          });
+
+          if (error) {
+            alert(error.message);
+          } else {
+            setPaymentMethodId(paymentMethod.id);
+          }
+        }
+      });
+    };
+
+    initializeStripe();
+  }, []);
+
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    const clientSecret = await fetch(
+      "http://localhost:4000/api/create-payment-intent",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          amount: amount,
+        }),
+      }
+    ).then((res) => res.json());
+  };
+
+  return (
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+      <div className="max-w-md w-full space-y-8 bg-white p-8 rounded-xl shadow-lg">
+        <div className="text-center">
+          <CreditCard className="mx-auto h-12 w-12 text-indigo-600" />
+          <h2 className="mt-6 text-3xl font-extrabold text-gray-900">
+            Payment Checkout
+          </h2>
+          <p className="mt-2 text-sm text-gray-600">
+            Secure payment processing with 3D Secure
+          </p>
+        </div>
+
+        <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
+          <div className="rounded-md shadow-sm space-y-4">
+            <div>
+              <label
+                htmlFor="amount"
+                className="block text-sm font-medium text-gray-700"
+              >
+                Amount
+              </label>
+              <div className="mt-1 relative">
+                <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-gray-500">
+                  $
+                </span>
+                <input
+                  id="amount"
+                  name="amount"
+                  type="text"
+                  required
+                  value={amount}
+                  onChange={(e) => setAmount(e.target.value)}
+                  className="block w-full pl-7 pr-12 sm:text-sm border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500"
+                  placeholder="0.00"
+                />
+              </div>
+            </div>
+
+            <div id="card"></div>
+          </div>
+
+          <div>
+            <button
+              type="submit"
+              className="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <span className="absolute left-0 inset-y-0 flex items-center pl-3">
+                <Lock className="h-5 w-5 text-indigo-500 group-hover:text-indigo-400" />
+              </span>
+              Pay
+            </button>
+          </div>
+        </form>
+
+        <div className="mt-4 text-center text-sm text-gray-600">
+          <p className="flex items-center justify-center space-x-2">
+            <Lock className="h-4 w-4" />
+            <span>Payments are secure and encrypted</span>
+          </p>
+        </div>
+      </div>
+      <Toaster position="top-right" />
+    </div>
+  );
+}
+
+export default App;
